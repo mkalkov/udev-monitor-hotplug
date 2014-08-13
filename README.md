@@ -13,11 +13,14 @@ I was inspired by http://stackoverflow.com/questions/5469828/how-to-create-a-cal
   * sudo cp usr/local/bin/monitor-hotplug.sh /usr/local/bin/
   * sudo cp etc/udev/rules.d/99-monitor-hotplug.rules  /etc/udev/rules.d/
   * sudo service udev restart
+  * sudo cp etc/lightdm/lightdm.conf.d/99-monitor-hotplug.conf /etc/lightdm/lightdm.conf.d/
 
-## Debuging
+## Debugging
   * sudo service udev stop
   * sudo udevd --debug 2>&1 | tee /tmp/udev.log
   * check what's happening when you plug/unplug your monitor
+  alternatively,
+  * udevadm monitor --property
 
 
 ## License 
