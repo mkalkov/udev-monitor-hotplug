@@ -1,69 +1,43 @@
-#!/bin/bash
+#!/bin/sh
 
-#Adapt this script to your needs.
+export DISPLAY=:0
+export XAUTHORITY=/var/run/lightdm/root/$DISPLAY
 
-DEVICES=$(find /sys/class/drm/*/status)
+internal=false
+external=false
+for drm_device in /sys/class/drm/* ; do
+  if $(grep -qs ^connected $drm_device/status); then
+    case "$(basename $drm_device | cut -d- -f2- | tr -d -)" in
+      LVDS1)
+        internal=true
+        ;;
+      VGA1)
+        external=true
+        ;;
+      *)
+        ;;
+    esac
+  fi
+done
 
-#inspired by /etc/acpd/lid.sh and the function it sources
-
-displaynum=`ls /tmp/.X11-unix/* | sed s#/tmp/.X11-unix/X##`
-display=":$displaynum"
-export DISPLAY=":$displaynum"
-
-uid=$(ck-list-sessions | awk 'BEGIN { unix_user = ""; } /^Session/ { unix_user = ""; } /unix-user =/ { gsub(/'\''/,"",$3); unix_user = $3; } /x11-display = '\'$display\''/ { print unix_user; exit (0); }')
-if [ -n "$uid" ]; then
-	# from https://wiki.archlinux.org/index.php/Acpid#Laptop_Monitor_Power_Off
-	export XAUTHORITY=$(ps -C Xorg -f --no-header | sed -n 's/.*-auth //; s/ -[^ ].*//; p')
+# To query current Xrandr state, run `xrandr` without arguments
+# To get current DPI run `xdpyinfo | grep resolution`
+if $internal && ! $external; then
+  xrandr --dpi 96x96 \
+    --output LVDS1 --primary \
+    --output VGA1 --off
+elif $internal && $external; then
+  # This modeline was obtained from running `cvt 1920 1080`
+  # The resolution is based on monitor and Intel GM965 chipset specs
+  # DPI is calculated as resolution divided by physical size in inches
+  xrandr --newmode "1920x1080_60.00"  173.00 \
+    1920 2048 2248 2576  1080 1083 1088 1120 -hsync +vsync 2>/dev/null
+  xrandr --addmode VGA1 1920x1080_60.00
+  xrandr --dpi 82x82 \
+    --output LVDS1 --mode 1280x800 --pos 1920x280 \
+    --output VGA1 --mode 1920x1080_60.00 --pos 0x0 --primary
 else
-  echo "unable to find an X session"
+  echo Please adapt this script to your configuration
   exit 1
-fi
-
-
-#this while loop declare the $HDMI1 $VGA1 $LVDS1 and others if they are plugged in
-while read l 
-do 
-  dir=$(dirname $l); 
-  status=$(cat $l); 
-  dev=$(echo $dir | cut -d\- -f 2-); 
-  
-  if [ $(expr match  $dev "HDMI") != "0" ]
-  then
-#REMOVE THE -X- part from HDMI-X-n
-    dev=HDMI${dev#HDMI-?-}
-  else 
-    dev=$(echo $dev | tr -d '-')
-  fi
-
-  if [ "connected" == "$status" ]
-  then 
-    echo $dev "connected"
-    declare $dev="yes"; 
-  
-  fi
-done <<< "$DEVICES"
-
-
-if [ ! -z "$HDMI1" -a ! -z "$VGA1" ]
-then
-  echo "HDMI1 and VGA1 are plugged in"
-  xrandr --output LVDS1 --off
-  xrandr --output VGA1 --mode 1920x1080 --noprimary
-  xrandr --output HDMI1 --mode 1920x1080 --right-of VGA1 --primary
-elif [ ! -z "$HDMI1" -a -z "$VGA1" ]; then
-  echo "HDMI1 is plugged in, but not VGA1"
-  xrandr --output LVDS1 --off
-  xrandr --output VGA1 --off
-  xrandr --output HDMI1 --mode 1920x1080 --primary
-elif [ -z "$HDMI1" -a ! -z "$VGA1" ]; then
-  echo "VGA1 is plugged in, but not HDMI1"
-  xrandr --output LVDS1 --off
-  xrandr --output HDMI1 --off
-  xrandr --output VGA1 --mode 1920x1080 --primary
-else
-  echo "No external monitors are plugged in"
-  xrandr --output LVDS1 --off
-  xrandr --output HDMI1 --off
-  xrandr --output LVDS1 --mode 1366x768 --primary
 fi
 
